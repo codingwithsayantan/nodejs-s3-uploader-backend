@@ -1,0 +1,22 @@
+{
+  "name": "file-uploader-backend",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "dotenv -e .env.dev -- nodemon src/app.js"
+  },
+  "dependencies": {
+    "aws-sdk": "^2.1692.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "dotenv-cli": "^8.0.0"
+  }
+}
