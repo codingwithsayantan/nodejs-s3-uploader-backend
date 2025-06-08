@@ -1,50 +1,60 @@
 const s3 = require("../utils/aws");
 const { v4: uuidv4 } = require("uuid");
 const path = require("path");
-
 const CONSTS = require("../config/consts");
+const uploadLogger = require("../utils/uploadLogger");
 
-// GET /api/aws-presigned-url
-// fileName:cws.png
-// contentType:image/png
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
+const PRESIGNED_URL_EXPIRY = 60 * 10; // 10 minutes
+
 exports.getPresignedUrl = async (req, res) => {
-  // Get fileName and contentType from the request body
-  const { fileName, contentType } = req.query;
+  const { fileName, contentType } = req.body;
 
-  // Validate fileName and contentType
   if (!fileName || !contentType) {
-    return res.status(400).send({
+    return res.status(400).json({
       status: false,
       message: "FileName and ContentType are required",
     });
   }
 
-  // Ensure fileName has a valid extension
-  const key = `${uuidv4()}${path.extname(fileName)}`;
+  const fileExtension = path.extname(fileName);
+  const key = `${uuidv4()}${fileExtension}`;
 
-  // Create parameters for the presigned URL
   const params = {
     Bucket: CONSTS.AWS.awsS3BucketName,
-    Key: key, // Unique Key (Object name)
-    Expires: 60 * 5, // 5 minutes
-    ContentType: contentType,
+    Fields: {
+      key,
+      "Content-Type": contentType,
+    },
+    Conditions: [
+      ["content-length-range", 0, MAX_FILE_SIZE],
+      ["eq", "$Content-Type", contentType],
+    ],
+    Expires: PRESIGNED_URL_EXPIRY,
   };
 
   try {
-    // Generate the presigned URL
-    const url = await s3.getSignedUrlPromise("putObject", params);
+    const presignedPost = await s3.createPresignedPost(params);
 
-    return res.send({
-      status: true,
-      message: "Filename and ContentType are required",
-      dataset: { url, key },
+    // Audit log for each presigned URL generation
+    uploadLogger.logUploadEvent({
+      ip: req.ip || req.connection?.remoteAddress || "unknown",
+      fileName,
+      contentType,
+      key,
     });
-  } catch (err) {
-    console.error(err);
 
-    return res.status(500).send({
+    return res.json({
+      status: true,
+      message: "Presigned POST policy generated",
+      dataset: { ...presignedPost, key },
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
       status: false,
-      message: "Failed to generate presigned URL",
+      message: "Failed to generate presigned POST policy",
     });
   }
 };
